@@ -1,0 +1,108 @@
+import { useState, useRef, useEffect } from "react";
+
+const INTENTS = [
+  { id: "onboarding", label: "Employee Onboarding", icon: "👤" },
+  { id: "leave", label: "Leave & Attendance", icon: "📅" },
+  { id: "policy", label: "Policy Q&A", icon: "📋" },
+  { id: "helpdesk", label: "HR Helpdesk", icon: "🎧" },
+  { id: "general", label: "General HR FAQ", icon: "❓" },
+];
+
+const SYSTEM_PROMPT = `You are an AI-powered HR Automation Agent for a company. You handle the following HR use cases:
+1. Employee Onboarding — joining dates, documents needed, first-day process, IT setup, team introductions
+2. Leave & Attendance — leave balance, how to apply, leave types (casual, sick, annual), attendance policies
+3. Policy Q&A — company policies, code of conduct, work from home policy, expense reimbursement
+4. HR Helpdesk — payroll queries, benefits, insurance, salary slips, PF/ESIC
+5. General HR FAQs — anything else HR-related
+Rules:
+- Be concise, friendly, and professional
+- Answer in 2-4 short sentences max
+- If you don't know something specific, say "Please contact HR at hr@company.com for this specific query"
+- Always stay on HR topics only
+- Format responses cleanly without markdown headers`;
+
+export default function HRAgent() {
+  const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I'm your HR Assistant. I can help you with onboarding, leave queries, company policies, and HR helpdesk support. How can I help you today?" }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [selectedIntent, setSelectedIntent] = useState(null);
+  const [history, setHistory] = useState([]);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  async function sendMessage(text) {
+    if (!text.trim() || loading) return;
+    const userMsg = { role: "user", content: text };
+    const newHistory = [...history, userMsg];
+    setMessages(prev => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: SYSTEM_PROMPT, messages: newHistory }),
+      });
+      const data = await res.json();
+      const reply = data.content?.[0]?.text || "Sorry, I couldn't process that.";
+      const assistantMsg = { role: "assistant", content: reply };
+      setMessages(prev => [...prev, assistantMsg]);
+      setHistory([...newHistory, assistantMsg]);
+    } catch { setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]); }
+    setLoading(false);
+  }
+
+  function handleIntentClick(intent) {
+    setSelectedIntent(intent.id);
+    const starters = { onboarding: "What documents do I need to submit for onboarding?", leave: "How do I check my leave balance?", policy: "What is the work from home policy?", helpdesk: "How do I download my salary slip?", general: "What are the office working hours?" };
+    sendMessage(starters[intent.id]);
+  }
+
+  return (
+    <div style={{ fontFamily: "sans-serif", maxWidth: 660, margin: "0 auto", padding: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🤖</div>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>HR Automation Agent</div>
+          <div style={{ fontSize: 12, color: "#666" }}>Powered by Claude · Onboarding · Leave · Policy · Helpdesk</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#1D9E75" }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#1D9E75" }}></div> Online
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 }}>
+        {INTENTS.map(intent => (
+          <button key={intent.id} onClick={() => handleIntentClick(intent)} style={{ fontSize: 12, padding: "5px 11px", borderRadius: 20, border: `1px solid ${selectedIntent === intent.id ? "#185FA5" : "#ddd"}`, background: selectedIntent === intent.id ? "#E6F1FB" : "#fff", color: selectedIntent === intent.id ? "#185FA5" : "#555", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            {intent.icon} {intent.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ border: "1px solid #eee", borderRadius: 12, background: "#fafafa", height: 360, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: 8 }}>
+            {msg.role === "assistant" && <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🤖</div>}
+            <div style={{ maxWidth: "72%", padding: "9px 13px", borderRadius: 12, fontSize: 14, lineHeight: 1.6, background: msg.role === "user" ? "#185FA5" : "#fff", color: msg.role === "user" ? "#fff" : "#1a1a1a", border: msg.role === "assistant" ? "1px solid #eee" : "none", borderBottomRightRadius: msg.role === "user" ? 3 : 12, borderBottomLeftRadius: msg.role === "assistant" ? 3 : 12 }}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🤖</div>
+            <div style={{ padding: "9px 13px", borderRadius: 12, background: "#fff", border: "1px solid #eee", fontSize: 14, color: "#999" }}>Typing...</div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendMessage(input); } }} placeholder="Ask about HR policies, leave, onboarding..." style={{ flex: 1, fontSize: 14, padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", outline: "none" }} disabled={loading} />
+        <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()} style={{ padding: "10px 18px", borderRadius: 8, fontSize: 14, fontWeight: 500, background: "#185FA5", color: "#fff", border: "none", cursor: loading || !input.trim() ? "not-allowed" : "pointer", opacity: loading || !input.trim() ? 0.6 : 1 }}>Send</button>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "#aaa", textAlign: "center" }}>Built by Harsh Nuwal · Intents · Dialog Flows · Prompt Engineering · Copilot Studio Concepts</div>
+    </div>
+  );
+}
